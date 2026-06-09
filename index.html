@@ -1,1081 +1,286 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>GayGPT™ — Advanced Gaydar Scanner</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<style>
-  /* ─── RESET & BASE ─────────────────────────────────────── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --pink:   #ff2d8a;
-    --purple: #b44bff;
-    --blue:   #3de4ff;
-    --yellow: #ffe156;
-    --bg:     #0b0b0f;
-    --surface:#131318;
-    --border: rgba(255,255,255,0.07);
-    --text:   #f0eeff;
-    --muted:  rgba(240,238,255,0.45);
-    --glow-pink:   0 0 40px rgba(255,45,138,0.35);
-    --glow-purple: 0 0 40px rgba(180,75,255,0.35);
-    --glow-blue:   0 0 40px rgba(61,228,255,0.35);
-    --radius: 20px;
-    --font-display: 'Syne', sans-serif;
-    --font-mono: 'DM Mono', monospace;
-  }
-  html, body {
-    min-height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-display);
-    overflow-x: hidden;
-  }
-  body { display: flex; flex-direction: column; align-items: center; }
-
-  /* ─── NOISE OVERLAY ──────────────────────────────────────*/
-  body::before {
-    content: '';
-    position: fixed; inset: 0; z-index: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-    opacity: 0.03;
-    pointer-events: none;
-  }
-
-  /* ─── AMBIENT BLOBS ──────────────────────────────────────*/
-  .blob {
-    position: fixed; border-radius: 50%;
-    filter: blur(120px); opacity: 0.18; pointer-events: none; z-index: 0;
-    animation: drift 12s ease-in-out infinite alternate;
-  }
-  .blob-1 { width: 600px; height: 600px; background: var(--pink);   top: -200px; left: -200px; }
-  .blob-2 { width: 500px; height: 500px; background: var(--purple); bottom: -150px; right: -150px; animation-delay: -4s; }
-  .blob-3 { width: 350px; height: 350px; background: var(--blue);   top: 40%; left: 50%; animation-delay: -8s; }
-  @keyframes drift {
-    from { transform: translate(0,0) scale(1); }
-    to   { transform: translate(40px, 30px) scale(1.08); }
-  }
-
-  /* ─── LAYOUT ─────────────────────────────────────────────*/
-  .screen {
-    position: relative; z-index: 1;
-    width: 100%; max-width: 520px;
-    min-height: 100svh;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 32px 20px;
-    gap: 24px;
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.4s ease;
-  }
-  .screen.active { opacity: 1; pointer-events: all; }
-
-  /* ─── LOGO / BRAND ───────────────────────────────────────*/
-  .logo {
-    font-size: clamp(2.2rem, 8vw, 3rem);
-    font-weight: 900;
-    letter-spacing: -0.03em;
-    background: linear-gradient(135deg, var(--pink) 0%, var(--purple) 50%, var(--blue) 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    text-align: center;
-    filter: drop-shadow(0 0 24px rgba(255,45,138,0.5));
-  }
-  .logo-tm { font-size: 0.45em; vertical-align: super; -webkit-text-fill-color: var(--muted); }
-  .tagline {
-    font-size: 0.9rem; font-weight: 400;
-    color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
-    text-align: center;
-  }
-
-  /* ─── CARDS ──────────────────────────────────────────────*/
-  .card {
-    width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 28px 24px;
-    display: flex; flex-direction: column; align-items: center; gap: 18px;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 2px 40px rgba(0,0,0,0.4);
-  }
-
-  /* ─── VIDEO FRAME ────────────────────────────────────────*/
-  .cam-wrapper {
-    position: relative; width: 100%; aspect-ratio: 4/3;
-    border-radius: 14px; overflow: hidden;
-    background: #060608;
-    border: 1px solid var(--border);
-    box-shadow: var(--glow-pink);
-  }
-  #camFeed, #poseFeed {
-    width: 100%; height: 100%; object-fit: cover;
-    transform: scaleX(-1); /* mirror */
-  }
-  .scan-line {
-    position: absolute; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, var(--pink), var(--purple), transparent);
-    animation: scanline 2s ease-in-out infinite;
-    box-shadow: 0 0 12px var(--pink);
-  }
-  @keyframes scanline {
-    0%   { top: 0%; opacity: 0; }
-    10%  { opacity: 1; }
-    90%  { opacity: 1; }
-    100% { top: 100%; opacity: 0; }
-  }
-  .corner { position: absolute; width: 20px; height: 20px; }
-  .corner-tl { top: 8px; left: 8px; border-top: 2px solid var(--blue); border-left: 2px solid var(--blue); }
-  .corner-tr { top: 8px; right: 8px; border-top: 2px solid var(--blue); border-right: 2px solid var(--blue); }
-  .corner-bl { bottom: 8px; left: 8px; border-bottom: 2px solid var(--blue); border-left: 2px solid var(--blue); }
-  .corner-br { bottom: 8px; right: 8px; border-bottom: 2px solid var(--blue); border-right: 2px solid var(--blue); }
-  .face-box {
-    position: absolute; top: 20%; left: 25%; width: 50%; height: 55%;
-    border: 1.5px dashed rgba(61,228,255,0.5);
-    border-radius: 50% 50% 45% 45%;
-    animation: facepulse 2s ease-in-out infinite;
-  }
-  @keyframes facepulse {
-    0%, 100% { opacity: 0.4; transform: scale(1); }
-    50%       { opacity: 0.9; transform: scale(1.02); }
-  }
-
-  /* ─── PROGRESS BAR ───────────────────────────────────────*/
-  .progress-wrap {
-    width: 100%; height: 6px;
-    background: rgba(255,255,255,0.06);
-    border-radius: 99px; overflow: hidden;
-  }
-  .progress-bar {
-    height: 100%; width: 0%;
-    background: linear-gradient(90deg, var(--pink), var(--purple), var(--blue));
-    border-radius: 99px;
-    transition: width 0.1s linear;
-    box-shadow: 0 0 12px var(--pink);
-  }
-
-  /* ─── STATUS TEXT ────────────────────────────────────────*/
-  .status {
-    font-family: var(--font-mono); font-size: 0.78rem;
-    color: var(--blue); letter-spacing: 0.05em;
-    min-height: 1.2em; text-align: center;
-  }
-
-  /* ─── STEP INDICATORS ────────────────────────────────────*/
-  .steps {
-    display: flex; gap: 8px; align-items: center;
-  }
-  .step-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: rgba(255,255,255,0.12);
-    transition: all 0.3s;
-  }
-  .step-dot.done  { background: var(--purple); box-shadow: 0 0 8px var(--purple); }
-  .step-dot.active { background: var(--pink); box-shadow: 0 0 10px var(--pink); transform: scale(1.4); }
-  .step-label { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-
-  /* ─── BUTTONS ────────────────────────────────────────────*/
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 14px 28px; border-radius: 12px;
-    font-family: var(--font-display); font-size: 1rem; font-weight: 700;
-    cursor: pointer; border: none; outline: none;
-    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
-    text-decoration: none;
-  }
-  .btn:active { transform: scale(0.97); }
-  .btn-primary {
-    background: linear-gradient(135deg, var(--pink), var(--purple));
-    color: #fff;
-    box-shadow: 0 4px 24px rgba(255,45,138,0.4);
-    width: 100%;
-  }
-  .btn-primary:hover { box-shadow: 0 6px 32px rgba(255,45,138,0.6); transform: translateY(-1px); }
-  .btn-secondary {
-    background: transparent;
-    color: var(--text);
-    border: 1px solid var(--border);
-    width: 100%;
-  }
-  .btn-secondary:hover { border-color: var(--purple); color: var(--purple); }
-  .btn-share {
-    background: linear-gradient(135deg, var(--blue), var(--purple));
-    color: #fff; width: 100%;
-    box-shadow: 0 4px 24px rgba(61,228,255,0.3);
-  }
-  .btn[disabled] { opacity: 0.4; pointer-events: none; }
-
-  /* ─── VOICE PHRASE ───────────────────────────────────────*/
-  .phrase-box {
-    width: 100%; padding: 16px 20px;
-    background: rgba(255,255,255,0.04);
-    border: 1px dashed rgba(180,75,255,0.4);
-    border-radius: 12px;
-    font-family: var(--font-mono); font-size: 1rem;
-    color: var(--yellow); text-align: center;
-    letter-spacing: 0.02em; line-height: 1.5;
-  }
-
-  /* ─── WAVEFORM VIZ ───────────────────────────────────────*/
-  .wave-wrap {
-    width: 100%; height: 64px;
-    display: flex; align-items: flex-end; gap: 3px;
-    padding: 0 8px;
-  }
-  .wave-bar {
-    flex: 1; background: linear-gradient(0deg, var(--pink), var(--purple));
-    border-radius: 3px 3px 0 0;
-    height: 4px; min-height: 4px;
-    transition: height 0.05s;
-  }
-
-  /* ─── POSE TIMER ─────────────────────────────────────────*/
-  .pose-timer {
-    font-size: 5rem; font-weight: 900;
-    background: linear-gradient(135deg, var(--pink), var(--blue));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    filter: drop-shadow(0 0 20px rgba(255,45,138,0.6));
-    animation: timerpulse 1s ease-in-out infinite;
-  }
-  @keyframes timerpulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.08); }
-  }
-
-  /* ─── LOADING SCREEN ─────────────────────────────────────*/
-  #screenLoading { gap: 28px; }
-  .loading-icon {
-    width: 100px; height: 100px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--pink), var(--purple), var(--blue));
-    display: flex; align-items: center; justify-content: center;
-    font-size: 2.4rem;
-    animation: spin-glow 3s linear infinite;
-    box-shadow: 0 0 40px rgba(255,45,138,0.5);
-  }
-  @keyframes spin-glow {
-    0%   { box-shadow: 0 0 40px rgba(255,45,138,0.5); transform: rotate(0deg); }
-    33%  { box-shadow: 0 0 40px rgba(180,75,255,0.5); }
-    66%  { box-shadow: 0 0 40px rgba(61,228,255,0.5); }
-    100% { box-shadow: 0 0 40px rgba(255,45,138,0.5); transform: rotate(360deg); }
-  }
-  .loading-msg {
-    font-family: var(--font-mono); font-size: 0.82rem;
-    color: var(--purple); text-align: center; letter-spacing: 0.04em;
-    min-height: 1.3em; transition: opacity 0.3s;
-  }
-
-  /* ─── RESULTS ────────────────────────────────────────────*/
-  .result-score-wrap {
-    position: relative; width: 180px; height: 180px;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .result-score-ring {
-    position: absolute; inset: 0;
-    border-radius: 50%;
-    border: 3px solid transparent;
-    background: conic-gradient(var(--pink) 0%, var(--purple) 40%, var(--blue) 100%, rgba(255,255,255,0.08) 100%) border-box;
-    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: destination-out;
-    mask-composite: exclude;
-    animation: ringappear 1s ease forwards;
-  }
-  @keyframes ringappear {
-    from { opacity: 0; transform: scale(0.7) rotate(-90deg); }
-    to   { opacity: 1; transform: scale(1) rotate(0deg); }
-  }
-  .result-score-num {
-    font-size: 3.6rem; font-weight: 900;
-    background: linear-gradient(135deg, var(--pink), var(--blue));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    filter: drop-shadow(0 0 16px rgba(255,45,138,0.6));
-    animation: numcount 1.2s ease forwards;
-  }
-  @keyframes numcount {
-    from { opacity: 0; transform: scale(0.5); }
-    to   { opacity: 1; transform: scale(1); }
-  }
-  .result-label { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-top: -8px; }
-  .subscores { width: 100%; display: flex; flex-direction: column; gap: 12px; }
-  .subscore-row { display: flex; flex-direction: column; gap: 6px; }
-  .subscore-meta { display: flex; justify-content: space-between; font-size: 0.8rem; }
-  .subscore-name { color: var(--muted); }
-  .subscore-val  { color: var(--text); font-weight: 700; font-family: var(--font-mono); }
-  .subscore-track {
-    width: 100%; height: 5px; background: rgba(255,255,255,0.07);
-    border-radius: 99px; overflow: hidden;
-  }
-  .subscore-fill {
-    height: 100%; border-radius: 99px;
-    transition: width 1s cubic-bezier(0.16,1,0.3,1);
-  }
-  .fill-face   { background: linear-gradient(90deg, var(--pink), var(--purple)); box-shadow: 0 0 8px var(--pink); }
-  .fill-voice  { background: linear-gradient(90deg, var(--purple), var(--blue)); box-shadow: 0 0 8px var(--purple); }
-  .fill-pose   { background: linear-gradient(90deg, var(--blue), var(--pink)); box-shadow: 0 0 8px var(--blue); }
-
-  .verdict-box {
-    width: 100%; padding: 16px 20px;
-    background: rgba(255,45,138,0.07);
-    border: 1px solid rgba(255,45,138,0.25);
-    border-radius: 12px; text-align: center;
-    font-size: 1.05rem; font-weight: 700; line-height: 1.4;
-    color: var(--text);
-    animation: fadein 0.6s 0.8s both;
-  }
-  .verdict-emoji { font-size: 1.5rem; display: block; margin-bottom: 4px; }
-  .roast-list { width: 100%; display: flex; flex-direction: column; gap: 8px; }
-  .roast-item {
-    font-family: var(--font-mono); font-size: 0.75rem;
-    color: var(--muted); padding: 8px 12px;
-    background: rgba(255,255,255,0.03);
-    border-left: 2px solid var(--purple);
-    border-radius: 0 8px 8px 0;
-    animation: fadein 0.4s ease both;
-  }
-  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-  /* ─── SHARE CARD ─────────────────────────────────────────*/
-  #shareCard {
-    width: 100%;
-    background: linear-gradient(135deg, #0f0f18, #17101f);
-    border: 1px solid rgba(255,45,138,0.3);
-    border-radius: 18px; padding: 24px;
-    display: flex; flex-direction: column; align-items: center; gap: 14px;
-    box-shadow: 0 0 60px rgba(255,45,138,0.15), 0 0 60px rgba(180,75,255,0.1);
-  }
-  .share-logo { font-size: 1.3rem; font-weight: 900; letter-spacing: -0.02em;
-    background: linear-gradient(90deg, var(--pink), var(--purple), var(--blue));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-  }
-  .share-big-score {
-    font-size: 4.5rem; font-weight: 900;
-    background: linear-gradient(135deg, var(--pink), var(--blue));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    line-height: 1; filter: drop-shadow(0 0 20px rgba(255,45,138,0.5));
-  }
-  .share-subs { display: flex; gap: 18px; }
-  .share-sub { text-align: center; }
-  .share-sub-num { font-size: 1.4rem; font-weight: 800; font-family: var(--font-mono); }
-  .share-sub-lbl { font-size: 0.68rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
-  .share-verdict { font-size: 0.82rem; color: var(--muted); font-style: italic; text-align: center; }
-  .share-url { font-family: var(--font-mono); font-size: 0.65rem; color: rgba(255,255,255,0.2); }
-
-  /* ─── HERO ───────────────────────────────────────────────*/
-  .hero-badge {
-    display: inline-block; padding: 5px 14px;
-    background: linear-gradient(90deg, rgba(255,45,138,0.15), rgba(180,75,255,0.15));
-    border: 1px solid rgba(255,45,138,0.3);
-    border-radius: 99px; font-size: 0.72rem;
-    color: var(--pink); letter-spacing: 0.1em; text-transform: uppercase;
-  }
-  .hero-title {
-    font-size: clamp(1.4rem, 5vw, 1.9rem); font-weight: 800; text-align: center; line-height: 1.2;
-  }
-  .hero-sub { font-size: 0.9rem; color: var(--muted); text-align: center; max-width: 320px; line-height: 1.6; }
-  .feature-pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-  .pill {
-    padding: 6px 14px; border-radius: 99px; font-size: 0.75rem; font-weight: 600;
-    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
-    color: var(--muted);
-  }
-  .disclaimer {
-    font-size: 0.68rem; color: rgba(255,255,255,0.2);
-    text-align: center; line-height: 1.5; padding: 0 8px;
-  }
-
-  /* ─── MIC VIZ ────────────────────────────────────────────*/
-  .mic-icon {
-    width: 80px; height: 80px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--purple), var(--pink));
-    display: flex; align-items: center; justify-content: center;
-    font-size: 2rem;
-    box-shadow: 0 0 0 0 rgba(180,75,255,0.4);
-  }
-  .mic-icon.recording { animation: micpulse 1s ease-in-out infinite; }
-  @keyframes micpulse {
-    0%   { box-shadow: 0 0 0 0 rgba(180,75,255,0.5); }
-    70%  { box-shadow: 0 0 0 24px rgba(180,75,255,0); }
-    100% { box-shadow: 0 0 0 0 rgba(180,75,255,0); }
-  }
-
-  /* ─── MEDIA ──────────────────────────────────────────────*/
-  @media (max-width: 400px) {
-    .card { padding: 20px 16px; }
-    .share-subs { gap: 12px; }
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GayGPT™ v2 — Advanced Gaydar Scanner</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- MediaPipe via CDN — no build step needed -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800;900&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
 </head>
 <body>
 
-<!-- Ambient blobs -->
-<div class="blob blob-1"></div>
-<div class="blob blob-2"></div>
-<div class="blob blob-3"></div>
+  <!-- ══════════════ NOISE + BLOBS ══════════════ -->
+  <div class="noise"></div>
+  <div class="blob blob-a"></div>
+  <div class="blob blob-b"></div>
+  <div class="blob blob-c"></div>
 
-<!-- ══════════════════════════════════════════════
-     SCREEN 0: LANDING
-═══════════════════════════════════════════════ -->
-<div class="screen active" id="screenLanding">
-  <div class="logo">GayGPT<span class="logo-tm">™</span></div>
-  <div class="tagline">Advanced AI Gaydar Scanner</div>
-
-  <div class="card">
-    <span class="hero-badge">🏳️‍🌈 AI-Powered Entertainment</span>
-    <p class="hero-title">How gay does the AI think you are?</p>
-    <p class="hero-sub">Our advanced neural network analyzes your face, voice, and poses to generate a completely made-up yet eerily specific score.</p>
-    <div class="feature-pills">
-      <span class="pill">👁️ Face Scan</span>
-      <span class="pill">🎙️ Voice Analysis</span>
-      <span class="pill">💅 Pose Energy</span>
-      <span class="pill">📊 Detailed Report</span>
+  <!-- ══════════════ SCREEN: LANDING ══════════════ -->
+  <section class="screen active" id="screen-landing">
+    <div class="landing-inner">
+      <div class="logo-wrap">
+        <span class="logo-text">GayGPT</span>
+        <span class="logo-badge">™ v2</span>
+      </div>
+      <p class="landing-tagline">Advanced Neural Gaydar™<br>Running Entirely In Your Browser</p>
+      <p class="landing-sub">Three-stage biometric analysis. Zero servers. Zero excuses.</p>
+      <div class="flow-steps">
+        <div class="flow-step"><span class="fs-icon">👁️</span><span>Face Scan</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="fs-icon">🎙️</span><span>Voice Scan</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="fs-icon">🎭</span><span>Performance</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><span class="fs-icon">📊</span><span>Results</span></div>
+      </div>
+      <button class="btn btn-primary" id="btn-start">Begin Scan 🔬</button>
+      <p class="disclaimer">Entertainment only. Results are randomly generated for humour. This product does not determine sexual orientation.</p>
     </div>
-    <button class="btn btn-primary" onclick="startScan()">Start Scan 🔍</button>
-    <p class="disclaimer">For entertainment purposes only. This is a parody product and does not claim to determine anyone's sexual orientation. Results are randomly generated for humor.</p>
-  </div>
-</div>
+  </section>
 
-<!-- ══════════════════════════════════════════════
-     SCREEN 1: FACE SCAN
-═══════════════════════════════════════════════ -->
-<div class="screen" id="screenFace">
-  <div class="logo" style="font-size:1.5rem">GayGPT<span class="logo-tm">™</span></div>
-
-  <div class="steps">
-    <div class="step-dot active" id="dot1"></div>
-    <div class="step-dot" id="dot2"></div>
-    <div class="step-dot" id="dot3"></div>
-    <span class="step-label" style="margin-left:6px">Step 1 of 3 — Face</span>
-  </div>
-
-  <div class="card">
-    <div class="cam-wrapper">
-      <video id="camFeed" autoplay playsinline muted></video>
-      <div class="scan-line" id="faceScanLine" style="display:none"></div>
-      <div class="face-box" id="faceBox" style="display:none"></div>
-      <div class="corner corner-tl"></div>
-      <div class="corner corner-tr"></div>
-      <div class="corner corner-bl"></div>
-      <div class="corner corner-br"></div>
+  <!-- ══════════════ SCREEN: FACE SCANNER ══════════════ -->
+  <section class="screen" id="screen-face">
+    <div class="screen-header">
+      <div class="logo-sm">GayGPT™</div>
+      <div class="step-pip-row">
+        <div class="step-pip active" data-label="Face"></div>
+        <div class="step-pip" data-label="Voice"></div>
+        <div class="step-pip" data-label="Perf."></div>
+      </div>
     </div>
-    <div class="progress-wrap"><div class="progress-bar" id="faceProgress"></div></div>
-    <div class="status" id="faceStatus">Position your face in the frame</div>
-    <button class="btn btn-primary" id="faceScanBtn" onclick="runFaceScan()">Scan Face 👁️</button>
-  </div>
-</div>
+    <h2 class="screen-title">Face Energy Analysis</h2>
+    <p class="screen-sub">Position your face in the frame. The AI is watching.</p>
 
-<!-- ══════════════════════════════════════════════
-     SCREEN 2: VOICE SCAN
-═══════════════════════════════════════════════ -->
-<div class="screen" id="screenVoice">
-  <div class="logo" style="font-size:1.5rem">GayGPT<span class="logo-tm">™</span></div>
-
-  <div class="steps">
-    <div class="step-dot done" ></div>
-    <div class="step-dot active"></div>
-    <div class="step-dot"></div>
-    <span class="step-label" style="margin-left:6px">Step 2 of 3 — Voice</span>
-  </div>
-
-  <div class="card">
-    <div class="phrase-box">"Oh my god,<br>that's actually insane."</div>
-    <div class="mic-icon" id="micIcon">🎙️</div>
-    <div class="wave-wrap" id="waveWrap">
-      <!-- bars injected by JS -->
+    <div class="cam-card" id="face-cam-card">
+      <video id="face-video" autoplay playsinline muted></video>
+      <canvas id="face-canvas"></canvas>
+      <div class="scan-rail"></div>
+      <div class="corner c-tl"></div><div class="corner c-tr"></div>
+      <div class="corner c-bl"></div><div class="corner c-br"></div>
+      <div class="live-badge">● LIVE</div>
     </div>
-    <div class="progress-wrap"><div class="progress-bar" id="voiceProgress"></div></div>
-    <div class="status" id="voiceStatus">Read the phrase aloud, then tap Record</div>
-    <button class="btn btn-primary" id="voiceRecordBtn" onclick="runVoiceScan()">Record Voice 🎙️</button>
-  </div>
-</div>
 
-<!-- ══════════════════════════════════════════════
-     SCREEN 3: POSE SCAN
-═══════════════════════════════════════════════ -->
-<div class="screen" id="screenPose">
-  <div class="logo" style="font-size:1.5rem">GayGPT<span class="logo-tm">™</span></div>
-
-  <div class="steps">
-    <div class="step-dot done"></div>
-    <div class="step-dot done"></div>
-    <div class="step-dot active"></div>
-    <span class="step-label" style="margin-left:6px">Step 3 of 3 — Pose</span>
-  </div>
-
-  <div class="card">
-    <p style="font-size:0.9rem; color:var(--muted); text-align:center; line-height:1.6">
-      Strike your most natural pose.<br>Hold it while the AI judges you.
-    </p>
-    <div class="cam-wrapper">
-      <video id="poseFeed" autoplay playsinline muted></video>
-      <div class="scan-line" id="poseScanLine" style="display:none"></div>
-      <div class="corner corner-tl"></div>
-      <div class="corner corner-tr"></div>
-      <div class="corner corner-bl"></div>
-      <div class="corner corner-br"></div>
+    <div class="metrics-grid" id="face-metrics">
+      <div class="metric-card"><div class="metric-label">Smile</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-smile"></div></div><div class="metric-val" id="val-smile">—</div></div>
+      <div class="metric-card"><div class="metric-label">Eyebrow</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-brow"></div></div><div class="metric-val" id="val-brow">—</div></div>
+      <div class="metric-card"><div class="metric-label">Eye Open</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-eye"></div></div><div class="metric-val" id="val-eye">—</div></div>
+      <div class="metric-card"><div class="metric-label">Head Tilt</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-tilt"></div></div><div class="metric-val" id="val-tilt">—</div></div>
+      <div class="metric-card"><div class="metric-label">Asymmetry</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-asym"></div></div><div class="metric-val" id="val-asym">—</div></div>
+      <div class="metric-card"><div class="metric-label">Expressiveness</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-expr"></div></div><div class="metric-val" id="val-expr">—</div></div>
     </div>
-    <div id="poseCounterWrap" style="display:none">
-      <div class="pose-timer" id="poseTimer">3</div>
+
+    <div class="big-score-row">
+      <span class="big-score-label">Face Energy:</span>
+      <span class="big-score-num" id="face-score-live">0%</span>
     </div>
-    <div class="progress-wrap"><div class="progress-bar" id="poseProgress"></div></div>
-    <div class="status" id="poseStatus">Strike a pose, then tap Scan</div>
-    <button class="btn btn-primary" id="poseScanBtn" onclick="runPoseScan()">Strike a Pose 💅</button>
-  </div>
-</div>
 
-<!-- ══════════════════════════════════════════════
-     SCREEN 4: LOADING / ANALYSIS
-═══════════════════════════════════════════════ -->
-<div class="screen" id="screenLoading">
-  <div class="logo" style="font-size:1.5rem">GayGPT<span class="logo-tm">™</span></div>
-  <div class="loading-icon">🏳️‍🌈</div>
-  <div style="text-align:center">
-    <div style="font-size:1.1rem; font-weight:700; margin-bottom:8px">Analyzing Data…</div>
-    <div class="loading-msg" id="loadingMsg">Initializing gaydar protocols…</div>
-  </div>
-  <div class="progress-wrap" style="width:280px"><div class="progress-bar" id="loadingProgress"></div></div>
-  <p style="font-size:0.75rem; color:var(--muted); text-align:center; max-width:260px">The AI is crunching 847 biometric data points. Please stand by.</p>
-</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-lock-face" disabled>Lock In Score →</button>
+    </div>
+    <p class="hint-text" id="face-hint">Waiting for camera…</p>
+  </section>
 
-<!-- ══════════════════════════════════════════════
-     SCREEN 5: RESULTS
-═══════════════════════════════════════════════ -->
-<div class="screen" id="screenResults">
-  <div class="logo" style="font-size:1.5rem">GayGPT<span class="logo-tm">™</span></div>
+  <!-- ══════════════ SCREEN: VOICE SCANNER ══════════════ -->
+  <section class="screen" id="screen-voice">
+    <div class="screen-header">
+      <div class="logo-sm">GayGPT™</div>
+      <div class="step-pip-row">
+        <div class="step-pip done" data-label="Face"></div>
+        <div class="step-pip active" data-label="Voice"></div>
+        <div class="step-pip" data-label="Perf."></div>
+      </div>
+    </div>
+    <h2 class="screen-title">Voice Energy Analysis</h2>
 
-  <div class="card">
-    <!-- Big Score -->
-    <div class="result-score-wrap">
-      <div class="result-score-ring"></div>
-      <div style="display:flex; flex-direction:column; align-items:center; gap:2px">
-        <div class="result-score-num" id="resultScoreNum">0%</div>
-        <div class="result-label">Gaydar Score</div>
+    <div class="phrase-card">
+      <p class="phrase-label">Say this phrase out loud:</p>
+      <p class="phrase-text">"Oh my god, that's actually insane. The drama of it all."</p>
+      <p class="phrase-tip">Keep talking naturally — you have 10 seconds.</p>
+    </div>
+
+    <div class="wave-card" id="wave-card">
+      <canvas id="wave-canvas" width="460" height="100"></canvas>
+      <div class="wave-overlay" id="wave-overlay">
+        <span>Tap Record to begin</span>
       </div>
     </div>
 
-    <!-- Subscores -->
-    <div class="subscores">
-      <div class="subscore-row">
-        <div class="subscore-meta">
-          <span class="subscore-name">Face Energy</span>
-          <span class="subscore-val" id="faceScoreLabel">—</span>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Avg Pitch</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-pitch"></div></div><div class="metric-val" id="val-pitch">—</div></div>
+      <div class="metric-card"><div class="metric-label">Pitch Variety</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-pitchvar"></div></div><div class="metric-val" id="val-pitchvar">—</div></div>
+      <div class="metric-card"><div class="metric-label">Volume Variety</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-volvar"></div></div><div class="metric-val" id="val-volvar">—</div></div>
+      <div class="metric-card"><div class="metric-label">Speech Rate</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-rate"></div></div><div class="metric-val" id="val-rate">—</div></div>
+      <div class="metric-card"><div class="metric-label">Vocal Drama</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-drama"></div></div><div class="metric-val" id="val-drama">—</div></div>
+      <div class="metric-card"><div class="metric-label">Energy Burst</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-burst"></div></div><div class="metric-val" id="val-burst">—</div></div>
+    </div>
+
+    <div class="big-score-row">
+      <span class="big-score-label">Voice Energy:</span>
+      <span class="big-score-num" id="voice-score-live">0%</span>
+    </div>
+
+    <div class="countdown-wrap" id="voice-countdown" style="display:none">
+      <div class="countdown-ring">
+        <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="ring-track"/><circle cx="40" cy="40" r="34" class="ring-fill" id="ring-fill"/></svg>
+        <span class="countdown-num" id="countdown-num">10</span>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-record">Record 10s 🎙️</button>
+    </div>
+    <p class="hint-text" id="voice-hint">Grant mic access when prompted</p>
+  </section>
+
+  <!-- ══════════════ SCREEN: PERFORMANCE CHALLENGE ══════════════ -->
+  <section class="screen" id="screen-perf">
+    <div class="screen-header">
+      <div class="logo-sm">GayGPT™</div>
+      <div class="step-pip-row">
+        <div class="step-pip done" data-label="Face"></div>
+        <div class="step-pip done" data-label="Voice"></div>
+        <div class="step-pip active" data-label="Perf."></div>
+      </div>
+    </div>
+    <h2 class="screen-title">Performance Challenge</h2>
+
+    <div class="challenge-card">
+      <p class="challenge-emoji">🍌</p>
+      <p class="challenge-prompt">Imagine a giant banana floating in front of you.<br><strong>Demonstrate how dramatically you would react.</strong></p>
+      <p class="challenge-tip">You have 8 seconds. Full body. Maximum drama.</p>
+    </div>
+
+    <div class="cam-card" id="perf-cam-card">
+      <video id="perf-video" autoplay playsinline muted></video>
+      <canvas id="perf-canvas"></canvas>
+      <div class="scan-rail"></div>
+      <div class="corner c-tl"></div><div class="corner c-tr"></div>
+      <div class="corner c-bl"></div><div class="corner c-br"></div>
+      <div class="live-badge">● LIVE</div>
+      <div class="perf-timer-overlay" id="perf-timer-overlay" style="display:none">
+        <span id="perf-timer-num">8</span>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Hand Speed</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-handspd"></div></div><div class="metric-val" id="val-handspd">—</div></div>
+      <div class="metric-card"><div class="metric-label">Arm Ext.</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-armext"></div></div><div class="metric-val" id="val-armext">—</div></div>
+      <div class="metric-card"><div class="metric-label">Body Motion</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-body"></div></div><div class="metric-val" id="val-body">—</div></div>
+      <div class="metric-card"><div class="metric-label">Head Mvmt</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-head"></div></div><div class="metric-val" id="val-head">—</div></div>
+      <div class="metric-card"><div class="metric-label">Enthusiasm</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-enth"></div></div><div class="metric-val" id="val-enth">—</div></div>
+      <div class="metric-card"><div class="metric-label">Drama Index</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-drmidx"></div></div><div class="metric-val" id="val-drmidx">—</div></div>
+    </div>
+
+    <div class="big-score-row">
+      <span class="big-score-label">Performance Energy:</span>
+      <span class="big-score-num" id="perf-score-live">0%</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-perf-start">Start 8s Challenge 🎭</button>
+    </div>
+    <p class="hint-text" id="perf-hint">Step back so your full body is visible</p>
+  </section>
+
+  <!-- ══════════════ SCREEN: LOADING ══════════════ -->
+  <section class="screen" id="screen-loading">
+    <div class="loading-inner">
+      <div class="loading-orb">🏳️‍🌈</div>
+      <h2 class="loading-title">Running Analysis…</h2>
+      <p class="loading-msg" id="loading-msg">Initialising gaydar protocols…</p>
+      <div class="loading-bar-wrap"><div class="loading-bar" id="loading-bar"></div></div>
+      <p class="loading-caption">Processing 847 biometric indicators</p>
+    </div>
+  </section>
+
+  <!-- ══════════════ SCREEN: RESULTS ══════════════ -->
+  <section class="screen" id="screen-results">
+    <div class="screen-header">
+      <div class="logo-sm">GayGPT™</div>
+    </div>
+
+    <div class="results-score-hero">
+      <div class="results-ring-wrap">
+        <svg viewBox="0 0 200 200" class="results-ring-svg">
+          <circle cx="100" cy="100" r="88" class="ring-track-big"/>
+          <circle cx="100" cy="100" r="88" class="ring-fill-big" id="ring-fill-big"/>
+        </svg>
+        <div class="results-center">
+          <div class="results-pct" id="results-pct">0%</div>
+          <div class="results-pct-label">GayGPT Score</div>
         </div>
-        <div class="subscore-track"><div class="subscore-fill fill-face" id="faceScoreFill" style="width:0%"></div></div>
       </div>
-      <div class="subscore-row">
-        <div class="subscore-meta">
-          <span class="subscore-name">Voice Energy</span>
-          <span class="subscore-val" id="voiceScoreLabel">—</span>
+    </div>
+
+    <div class="results-breakdown">
+      <div class="breakdown-item">
+        <div class="breakdown-header">
+          <span class="breakdown-icon">👁️</span>
+          <span class="breakdown-name">Face Energy</span>
+          <span class="breakdown-score" id="res-face-score">—</span>
         </div>
-        <div class="subscore-track"><div class="subscore-fill fill-voice" id="voiceScoreFill" style="width:0%"></div></div>
+        <div class="breakdown-bar-wrap"><div class="breakdown-bar bar-pink" id="res-face-bar"></div></div>
+        <p class="breakdown-notes" id="res-face-notes"></p>
       </div>
-      <div class="subscore-row">
-        <div class="subscore-meta">
-          <span class="subscore-name">Pose Energy</span>
-          <span class="subscore-val" id="poseScoreLabel">—</span>
+      <div class="breakdown-item">
+        <div class="breakdown-header">
+          <span class="breakdown-icon">🎙️</span>
+          <span class="breakdown-name">Voice Energy</span>
+          <span class="breakdown-score" id="res-voice-score">—</span>
         </div>
-        <div class="subscore-track"><div class="subscore-fill fill-pose" id="poseScoreFill" style="width:0%"></div></div>
+        <div class="breakdown-bar-wrap"><div class="breakdown-bar bar-purple" id="res-voice-bar"></div></div>
+        <p class="breakdown-notes" id="res-voice-notes"></p>
+      </div>
+      <div class="breakdown-item">
+        <div class="breakdown-header">
+          <span class="breakdown-icon">🎭</span>
+          <span class="breakdown-name">Performance Energy</span>
+          <span class="breakdown-score" id="res-perf-score">—</span>
+        </div>
+        <div class="breakdown-bar-wrap"><div class="breakdown-bar bar-blue" id="res-perf-bar"></div></div>
+        <p class="breakdown-notes" id="res-perf-notes"></p>
       </div>
     </div>
 
-    <!-- Verdict -->
-    <div class="verdict-box">
-      <span class="verdict-emoji" id="verdictEmoji">🏳️‍🌈</span>
-      <span id="verdictText">Loading verdict…</span>
+    <div class="verdict-card" id="verdict-card">
+      <div class="verdict-emoji" id="verdict-emoji">🌈</div>
+      <div class="verdict-text" id="verdict-text">—</div>
     </div>
 
-    <!-- Roast lines -->
-    <div class="roast-list" id="roastList"></div>
-  </div>
-
-  <!-- Share Card -->
-  <div id="shareCard">
-    <div class="share-logo">GAYDAR SCANNER™</div>
-    <div class="share-big-score" id="shareScore">87%</div>
-    <div class="share-subs">
-      <div class="share-sub">
-        <div class="share-sub-num" id="shareFace" style="color:var(--pink)">—</div>
-        <div class="share-sub-lbl">Face</div>
-      </div>
-      <div class="share-sub">
-        <div class="share-sub-num" id="shareVoice" style="color:var(--purple)">—</div>
-        <div class="share-sub-lbl">Voice</div>
-      </div>
-      <div class="share-sub">
-        <div class="share-sub-num" id="sharePose" style="color:var(--blue)">—</div>
-        <div class="share-sub-lbl">Pose</div>
-      </div>
+    <div class="roast-section">
+      <p class="roast-heading">AI Observations:</p>
+      <div class="roast-list" id="roast-list"></div>
     </div>
-    <div class="share-verdict" id="shareVerdictText"></div>
-    <div class="share-url">gaygpt.ai</div>
-  </div>
 
-  <div style="width:100%; display:flex; flex-direction:column; gap:10px">
-    <button class="btn btn-share" onclick="copyResults()">📋 Copy Results</button>
-    <button class="btn btn-secondary" onclick="resetAll()">🔄 Scan Again</button>
-  </div>
+    <div class="share-card" id="share-card">
+      <div class="sc-logo">GAYDAR SCANNER™</div>
+      <div class="sc-score" id="sc-score">—</div>
+      <div class="sc-subs">
+        <div><div class="sc-sub-num" id="sc-face" style="color:var(--pink)">—</div><div class="sc-sub-lbl">Face</div></div>
+        <div><div class="sc-sub-num" id="sc-voice" style="color:var(--purple)">—</div><div class="sc-sub-lbl">Voice</div></div>
+        <div><div class="sc-sub-num" id="sc-perf" style="color:var(--blue)">—</div><div class="sc-sub-lbl">Perf.</div></div>
+      </div>
+      <div class="sc-verdict" id="sc-verdict"></div>
+      <div class="sc-url">gaygpt.ai • entertainment only</div>
+    </div>
 
-  <p class="disclaimer">Entertainment only. Results are randomly generated.</p>
-</div>
+    <div class="btn-row">
+      <button class="btn btn-share" id="btn-copy">📋 Copy Results</button>
+      <button class="btn btn-secondary" id="btn-again">🔄 Scan Again</button>
+    </div>
+    <p class="disclaimer">Entertainment only. For laughs and TikToks. Not a real classifier.</p>
+  </section>
 
-
-<!-- ══════════════════════════════════════════════
-     JAVASCRIPT
-═══════════════════════════════════════════════ -->
-<script>
-/* ─── STATE ──────────────────────────────────────────────── */
-const state = {
-  faceScore: 0,
-  voiceScore: 0,
-  poseScore: 0,
-  totalScore: 0,
-  camStream: null,
-  audioCtx: null,
-  analyser: null,
-  waveAnimId: null,
-};
-
-/* ─── SCREEN ROUTER ──────────────────────────────────────── */
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0, 0);
-}
-
-/* ─── WEBCAM ─────────────────────────────────────────────── */
-async function getCam(videoEl) {
-  try {
-    if (state.camStream) {
-      state.camStream.getTracks().forEach(t => t.stop());
-    }
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: false,
-    });
-    state.camStream = stream;
-    videoEl.srcObject = stream;
-    await videoEl.play();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function startScan() {
-  showScreen('screenFace');
-  const ok = await getCam(document.getElementById('camFeed'));
-  if (!ok) {
-    document.getElementById('faceStatus').textContent = 'Camera access denied — score will be estimated';
-    document.getElementById('faceStatus').style.color = 'var(--pink)';
-  }
-}
-
-/* ─── FACE SCAN ──────────────────────────────────────────── */
-const FACE_MSGS = [
-  'Analyzing cheekbone energy…',
-  'Measuring eyebrow confidence…',
-  'Detecting main character syndrome…',
-  'Calculating brunch probability…',
-  'Reading facial drama index…',
-  'Evaluating glam coefficient…',
-  'Scanning for theatrical tendencies…',
-  'Assessing eyelash authority…',
-];
-
-function runFaceScan() {
-  const btn = document.getElementById('faceScanBtn');
-  btn.setAttribute('disabled', true);
-  document.getElementById('faceScanLine').style.display = 'block';
-  document.getElementById('faceBox').style.display = 'block';
-
-  let pct = 0;
-  let msgIdx = 0;
-  const bar = document.getElementById('faceProgress');
-  const status = document.getElementById('faceStatus');
-
-  status.textContent = FACE_MSGS[0];
-
-  const interval = setInterval(() => {
-    pct += 100 / (3000 / 80);
-    bar.style.width = Math.min(pct, 100) + '%';
-    if (pct % 30 < 5) {
-      msgIdx = (msgIdx + 1) % FACE_MSGS.length;
-      status.textContent = FACE_MSGS[msgIdx];
-    }
-    if (pct >= 100) {
-      clearInterval(interval);
-      state.faceScore = randScore(42, 96);
-      document.getElementById('faceScanLine').style.display = 'none';
-      status.textContent = `✓ Face scanned — Energy: ${state.faceScore}%`;
-      status.style.color = 'var(--pink)';
-      setTimeout(() => {
-        stopCam();
-        showScreen('screenVoice');
-        setupWaveBars();
-      }, 600);
-    }
-  }, 80);
-}
-
-function stopCam() {
-  if (state.camStream) {
-    state.camStream.getTracks().forEach(t => t.stop());
-    state.camStream = null;
-  }
-}
-
-/* ─── WAVE BARS ──────────────────────────────────────────── */
-function setupWaveBars() {
-  const wrap = document.getElementById('waveWrap');
-  wrap.innerHTML = '';
-  for (let i = 0; i < 32; i++) {
-    const bar = document.createElement('div');
-    bar.className = 'wave-bar';
-    wrap.appendChild(bar);
-  }
-}
-
-function animateWave(analyser) {
-  const bars = document.querySelectorAll('.wave-bar');
-  const dataArr = new Uint8Array(analyser.frequencyBinCount);
-  function draw() {
-    state.waveAnimId = requestAnimationFrame(draw);
-    analyser.getByteFrequencyData(dataArr);
-    bars.forEach((bar, i) => {
-      const idx = Math.floor((i / bars.length) * dataArr.length * 0.6);
-      const val = dataArr[idx] / 255;
-      bar.style.height = Math.max(4, val * 56) + 'px';
-      bar.style.opacity = 0.4 + val * 0.6;
-    });
-  }
-  draw();
-}
-
-function stopWave() {
-  if (state.waveAnimId) cancelAnimationFrame(state.waveAnimId);
-  document.querySelectorAll('.wave-bar').forEach(b => { b.style.height = '4px'; b.style.opacity = '0.3'; });
-}
-
-/* ─── VOICE SCAN ─────────────────────────────────────────── */
-const VOICE_MSGS = [
-  'Analyzing pitch variation…',
-  'Measuring dramatic emphasis…',
-  'Detecting vocal fry index…',
-  'Calculating storytelling energy…',
-  'Evaluating consonant enthusiasm…',
-  'Scanning for theatrical resonance…',
-  'Measuring omg velocity…',
-];
-
-async function runVoiceScan() {
-  const btn = document.getElementById('voiceRecordBtn');
-  btn.setAttribute('disabled', true);
-  btn.textContent = '🔴 Recording…';
-
-  const micIcon = document.getElementById('micIcon');
-  micIcon.classList.add('recording');
-
-  let micStream = null;
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    state.analyser = state.audioCtx.createAnalyser();
-    state.analyser.fftSize = 256;
-    const src = state.audioCtx.createMediaStreamSource(micStream);
-    src.connect(state.analyser);
-    animateWave(state.analyser);
-  } catch {
-    document.getElementById('voiceStatus').textContent = 'Mic denied — estimating score';
-  }
-
-  let pct = 0; let msgIdx = 0;
-  const bar = document.getElementById('voiceProgress');
-  const status = document.getElementById('voiceStatus');
-  status.textContent = VOICE_MSGS[0];
-
-  const interval = setInterval(() => {
-    pct += 100 / (4000 / 80);
-    bar.style.width = Math.min(pct, 100) + '%';
-    if (pct % 28 < 4) {
-      msgIdx = (msgIdx + 1) % VOICE_MSGS.length;
-      status.textContent = VOICE_MSGS[msgIdx];
-    }
-    if (pct >= 100) {
-      clearInterval(interval);
-      stopWave();
-      micIcon.classList.remove('recording');
-      if (micStream) micStream.getTracks().forEach(t => t.stop());
-      if (state.audioCtx) state.audioCtx.close();
-      state.voiceScore = randScore(38, 98);
-      status.textContent = `✓ Voice analyzed — Energy: ${state.voiceScore}%`;
-      status.style.color = 'var(--purple)';
-      setTimeout(async () => {
-        showScreen('screenPose');
-        const ok = await getCam(document.getElementById('poseFeed'));
-        if (!ok) {
-          document.getElementById('poseStatus').textContent = 'Camera denied — score will be estimated';
-        }
-      }, 600);
-    }
-  }, 80);
-}
-
-/* ─── POSE SCAN ──────────────────────────────────────────── */
-const POSE_MSGS = [
-  'Analyzing pose confidence…',
-  'Measuring body openness…',
-  'Evaluating hand placement authority…',
-  'Detecting drama in extremities…',
-  'Calculating fabulous energy…',
-  'Scanning for main character posture…',
-  'Assessing stance commitment…',
-];
-
-function runPoseScan() {
-  const btn = document.getElementById('poseScanBtn');
-  btn.setAttribute('disabled', true);
-
-  const counterWrap = document.getElementById('poseCounterWrap');
-  const timerEl = document.getElementById('poseTimer');
-  counterWrap.style.display = 'block';
-  document.getElementById('poseScanLine').style.display = 'block';
-
-  let count = 3;
-  timerEl.textContent = count;
-
-  const countInterval = setInterval(() => {
-    count--;
-    if (count > 0) {
-      timerEl.textContent = count;
-    } else {
-      clearInterval(countInterval);
-      timerEl.textContent = '📸';
-      setTimeout(() => {
-        counterWrap.style.display = 'none';
-        analyzePose();
-      }, 500);
-    }
-  }, 1000);
-}
-
-function analyzePose() {
-  let pct = 0; let msgIdx = 0;
-  const bar = document.getElementById('poseProgress');
-  const status = document.getElementById('poseStatus');
-  status.textContent = POSE_MSGS[0];
-
-  const interval = setInterval(() => {
-    pct += 100 / (3500 / 80);
-    bar.style.width = Math.min(pct, 100) + '%';
-    if (pct % 26 < 4) {
-      msgIdx = (msgIdx + 1) % POSE_MSGS.length;
-      status.textContent = POSE_MSGS[msgIdx];
-    }
-    if (pct >= 100) {
-      clearInterval(interval);
-      document.getElementById('poseScanLine').style.display = 'none';
-      state.poseScore = randScore(45, 99);
-      status.textContent = `✓ Pose captured — Energy: ${state.poseScore}%`;
-      status.style.color = 'var(--blue)';
-      stopCam();
-      setTimeout(runFinalAnalysis, 700);
-    }
-  }, 80);
-}
-
-/* ─── FINAL LOADING ──────────────────────────────────────── */
-const FINAL_MSGS = [
-  'Consulting the rainbow database…',
-  'Cross-referencing with cultural indicators…',
-  'Calibrating brunch sensor array…',
-  'Analyzing Lana Del Rey likelihood…',
-  'Measuring Beyoncé recognition index…',
-  'Evaluating IKEA furniture opinions…',
-  'Scanning for RuPaul awareness…',
-  'Calculating overall charisma levels…',
-  'Generating comprehensive gay report…',
-  'Final calibration in progress…',
-];
-
-function runFinalAnalysis() {
-  showScreen('screenLoading');
-  let pct = 0; let msgIdx = 0;
-  const bar = document.getElementById('loadingProgress');
-  const msg = document.getElementById('loadingMsg');
-  msg.textContent = FINAL_MSGS[0];
-
-  const interval = setInterval(() => {
-    pct += 100 / (5000 / 80);
-    bar.style.width = Math.min(pct, 100) + '%';
-    if (pct % 18 < 3) {
-      msgIdx = (msgIdx + 1) % FINAL_MSGS.length;
-      msg.style.opacity = '0';
-      setTimeout(() => {
-        msg.textContent = FINAL_MSGS[msgIdx];
-        msg.style.opacity = '1';
-      }, 200);
-    }
-    if (pct >= 100) {
-      clearInterval(interval);
-      state.totalScore = Math.round((state.faceScore * 0.33 + state.voiceScore * 0.35 + state.poseScore * 0.32));
-      setTimeout(showResults, 400);
-    }
-  }, 80);
-}
-
-/* ─── RESULTS ────────────────────────────────────────────── */
-const VERDICTS = [
-  { min: 0,  max: 30,  emoji: '🤔', text: 'The AI remains unconvinced. Straight until proven fabulous.' },
-  { min: 30, max: 50,  emoji: '👀', text: 'Interesting. The performance raised additional questions.' },
-  { min: 50, max: 65,  emoji: '✨', text: 'Considerable potential detected. The AI has some follow-up questions.' },
-  { min: 65, max: 78,  emoji: '💅', text: 'Would absolutely know the best brunch spots.' },
-  { min: 78, max: 88,  emoji: '🌈', text: 'Aggressively qualified. The data speaks for itself.' },
-  { min: 88, max: 101, emoji: '🏳️‍🌈', text: 'Statistically undeniable. The AI is not shocked.' },
-];
-
-const ROAST_POOL = [
-  'Strong commitment to the pose.',
-  'Suspiciously high eyebrow confidence.',
-  'Voice contained dramatic emphasis.',
-  'Maintained eye contact with unusual conviction.',
-  'Demonstrated advanced storytelling energy.',
-  'Above-average theatrical commitment detected.',
-  'Facial movement exceeded baseline expectations.',
-  'Head tilt angle was statistically notable.',
-  'Body language radiated main character energy.',
-  'Cheekbone architecture raised multiple flags.',
-  'Vocal pitch variation was cinema-tier.',
-  'Hand placement suggested advanced spatial awareness.',
-  'Smile intensity bypassed standard thresholds.',
-  'The AI detected traces of Taylor Swift knowledge.',
-  'Eyebrow choreography was frankly impressive.',
-  'Gestural vocabulary exceeded population average.',
-  'Resonance pattern consistent with theatre kids.',
-  'Pose confidence triggered three separate alerts.',
-  'Voice energy suggested a detailed skincare routine.',
-  'Camera presence suggested reality TV experience.',
-];
-
-function pickRoasts(score) {
-  const shuffled = [...ROAST_POOL].sort(() => Math.random() - 0.5);
-  const count = score > 70 ? 5 : score > 50 ? 4 : 3;
-  return shuffled.slice(0, count);
-}
-
-function showResults() {
-  showScreen('screenResults');
-
-  const fs = state.faceScore;
-  const vs = state.voiceScore;
-  const ps = state.poseScore;
-  const total = state.totalScore;
-
-  // Animate main score
-  let displayed = 0;
-  const target = total;
-  const scoreEl = document.getElementById('resultScoreNum');
-  const scoreInterval = setInterval(() => {
-    displayed = Math.min(displayed + Math.ceil(target / 40), target);
-    scoreEl.textContent = displayed + '%';
-    if (displayed >= target) clearInterval(scoreInterval);
-  }, 30);
-
-  // Subscores
-  setTimeout(() => {
-    document.getElementById('faceScoreLabel').textContent = fs + '%';
-    document.getElementById('voiceScoreLabel').textContent = vs + '%';
-    document.getElementById('poseScoreLabel').textContent = ps + '%';
-    document.getElementById('faceScoreFill').style.width = fs + '%';
-    document.getElementById('voiceScoreFill').style.width = vs + '%';
-    document.getElementById('poseScoreFill').style.width = ps + '%';
-  }, 300);
-
-  // Verdict
-  const v = VERDICTS.find(v => total >= v.min && total < v.max) || VERDICTS[VERDICTS.length - 1];
-  document.getElementById('verdictEmoji').textContent = v.emoji;
-  document.getElementById('verdictText').textContent = v.text;
-
-  // Roasts
-  const roastList = document.getElementById('roastList');
-  roastList.innerHTML = '';
-  pickRoasts(total).forEach((r, i) => {
-    const el = document.createElement('div');
-    el.className = 'roast-item';
-    el.style.animationDelay = (0.4 + i * 0.1) + 's';
-    el.textContent = '• ' + r;
-    roastList.appendChild(el);
-  });
-
-  // Share card
-  document.getElementById('shareScore').textContent = total + '%';
-  document.getElementById('shareFace').textContent = fs + '%';
-  document.getElementById('shareVoice').textContent = vs + '%';
-  document.getElementById('sharePose').textContent = ps + '%';
-  document.getElementById('shareVerdictText').textContent = '"' + v.text + '"';
-}
-
-/* ─── SHARE / COPY ───────────────────────────────────────── */
-function copyResults() {
-  const v = document.getElementById('verdictText').textContent;
-  const text =
-`🏳️‍🌈 GAYDAR SCANNER™ RESULTS
-
-Overall: ${state.totalScore}%
-Face Energy: ${state.faceScore}%
-Voice Energy: ${state.voiceScore}%
-Pose Energy: ${state.poseScore}%
-
-Verdict: "${v}"
-
-Scan yourself at gaygpt.ai`;
-
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => {
-      const btn = document.querySelector('.btn-share');
-      const orig = btn.textContent;
-      btn.textContent = '✅ Copied!';
-      setTimeout(() => btn.textContent = orig, 2000);
-    });
-  } else {
-    alert(text);
-  }
-}
-
-/* ─── RESET ──────────────────────────────────────────────── */
-function resetAll() {
-  state.faceScore = 0;
-  state.voiceScore = 0;
-  state.poseScore = 0;
-  state.totalScore = 0;
-
-  // Reset progress bars
-  ['faceProgress','voiceProgress','poseProgress','loadingProgress'].forEach(id => {
-    document.getElementById(id).style.width = '0%';
-  });
-
-  // Re-enable buttons
-  document.getElementById('faceScanBtn').removeAttribute('disabled');
-  document.getElementById('faceScanBtn').textContent = 'Scan Face 👁️';
-  document.getElementById('voiceRecordBtn').removeAttribute('disabled');
-  document.getElementById('voiceRecordBtn').textContent = 'Record Voice 🎙️';
-  document.getElementById('poseScanBtn').removeAttribute('disabled');
-  document.getElementById('poseScanBtn').textContent = 'Strike a Pose 💅';
-
-  // Reset statuses
-  document.getElementById('faceStatus').textContent = 'Position your face in the frame';
-  document.getElementById('faceStatus').style.color = '';
-  document.getElementById('voiceStatus').textContent = 'Read the phrase aloud, then tap Record';
-  document.getElementById('voiceStatus').style.color = '';
-  document.getElementById('poseStatus').textContent = 'Strike a pose, then tap Scan';
-  document.getElementById('poseStatus').style.color = '';
-
-  showScreen('screenLanding');
-}
-
-/* ─── UTILS ──────────────────────────────────────────────── */
-function randScore(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-</script>
+  <script src="js/roasts.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/face.js"></script>
+  <script src="js/performance.js"></script>
+  <script src="js/results.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
