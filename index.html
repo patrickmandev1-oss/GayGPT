@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>GayGPT™ v2 — Advanced Gaydar Scanner</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- MediaPipe via CDN — no build step needed -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -14,11 +13,11 @@
 </head>
 <body>
 
-  <!-- ══════════════ NOISE + BLOBS ══════════════ -->
   <div class="noise"></div>
   <div class="blob blob-a"></div>
   <div class="blob blob-b"></div>
   <div class="blob blob-c"></div>
+  <div id="confetti-container"></div>
 
   <!-- ══════════════ SCREEN: LANDING ══════════════ -->
   <section class="screen active" id="screen-landing">
@@ -39,7 +38,7 @@
         <div class="flow-step"><span class="fs-icon">📊</span><span>Results</span></div>
       </div>
       <button class="btn btn-primary" id="btn-start">Begin Scan 🔬</button>
-      <p class="disclaimer">Entertainment only. Results are randomly generated for humour. This product does not determine sexual orientation.</p>
+      <p class="disclaimer">Entertainment only. Results are generated for humour. This product does not determine sexual orientation.</p>
     </div>
   </section>
 
@@ -54,7 +53,6 @@
       </div>
     </div>
     <h2 class="screen-title">Face Energy Analysis</h2>
-    <p class="screen-sub">Position your face in the frame. The AI is watching.</p>
 
     <div class="cam-card" id="face-cam-card">
       <video id="face-video" autoplay playsinline muted></video>
@@ -65,22 +63,28 @@
       <div class="live-badge">● LIVE</div>
     </div>
 
-    <div class="metrics-grid" id="face-metrics">
-      <div class="metric-card"><div class="metric-label">Smile</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-smile"></div></div><div class="metric-val" id="val-smile">—</div></div>
-      <div class="metric-card"><div class="metric-label">Eyebrow</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-brow"></div></div><div class="metric-val" id="val-brow">—</div></div>
-      <div class="metric-card"><div class="metric-label">Eye Open</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-eye"></div></div><div class="metric-val" id="val-eye">—</div></div>
-      <div class="metric-card"><div class="metric-label">Head Tilt</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-tilt"></div></div><div class="metric-val" id="val-tilt">—</div></div>
-      <div class="metric-card"><div class="metric-label">Asymmetry</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-asym"></div></div><div class="metric-val" id="val-asym">—</div></div>
-      <div class="metric-card"><div class="metric-label">Expressiveness</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-expr"></div></div><div class="metric-val" id="val-expr">—</div></div>
-    </div>
-
     <div class="big-score-row">
       <span class="big-score-label">Face Energy:</span>
       <span class="big-score-num" id="face-score-live">0%</span>
     </div>
 
+    <div class="scan-progress-wrap">
+      <div class="scan-progress-bar" id="face-progress-bar"></div>
+    </div>
+
+    <p class="live-feedback" id="face-live-feedback">Initialising scanner…</p>
+
+    <!-- Lock-in countdown (shown after 5s analysis) -->
+    <div class="lockin-wrap" id="face-lockin-wrap" style="display:none">
+      <div class="lockin-detected">Face Detected ✓ &nbsp; Scanning…</div>
+      <div class="lockin-countdown-row">
+        <span class="lockin-label">Auto-lock in:</span>
+        <span class="lockin-num" id="face-lockin-num">5</span>
+      </div>
+    </div>
+
     <div class="btn-row">
-      <button class="btn btn-primary" id="btn-lock-face" disabled>Lock In Score →</button>
+      <button class="btn btn-primary" id="btn-lock-face" disabled>Lock In Face →</button>
     </div>
     <p class="hint-text" id="face-hint">Waiting for camera…</p>
   </section>
@@ -100,23 +104,14 @@
     <div class="phrase-card">
       <p class="phrase-label">Say this phrase out loud:</p>
       <p class="phrase-text">"Oh my god, that's actually insane. The drama of it all."</p>
-      <p class="phrase-tip">Keep talking naturally — you have 10 seconds.</p>
+      <p class="phrase-tip">You have 5 seconds. Let your personality through.</p>
     </div>
 
     <div class="wave-card" id="wave-card">
-      <canvas id="wave-canvas" width="460" height="100"></canvas>
+      <canvas id="wave-canvas" width="460" height="80"></canvas>
       <div class="wave-overlay" id="wave-overlay">
         <span>Tap Record to begin</span>
       </div>
-    </div>
-
-    <div class="metrics-grid">
-      <div class="metric-card"><div class="metric-label">Avg Pitch</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-pitch"></div></div><div class="metric-val" id="val-pitch">—</div></div>
-      <div class="metric-card"><div class="metric-label">Pitch Variety</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-pitchvar"></div></div><div class="metric-val" id="val-pitchvar">—</div></div>
-      <div class="metric-card"><div class="metric-label">Volume Variety</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-volvar"></div></div><div class="metric-val" id="val-volvar">—</div></div>
-      <div class="metric-card"><div class="metric-label">Speech Rate</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-rate"></div></div><div class="metric-val" id="val-rate">—</div></div>
-      <div class="metric-card"><div class="metric-label">Vocal Drama</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-drama"></div></div><div class="metric-val" id="val-drama">—</div></div>
-      <div class="metric-card"><div class="metric-label">Energy Burst</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-burst"></div></div><div class="metric-val" id="val-burst">—</div></div>
     </div>
 
     <div class="big-score-row">
@@ -124,15 +119,21 @@
       <span class="big-score-num" id="voice-score-live">0%</span>
     </div>
 
+    <div class="scan-progress-wrap">
+      <div class="scan-progress-bar" id="voice-progress-bar"></div>
+    </div>
+
+    <p class="live-feedback" id="voice-live-feedback">Ready when you are…</p>
+
     <div class="countdown-wrap" id="voice-countdown" style="display:none">
       <div class="countdown-ring">
         <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" class="ring-track"/><circle cx="40" cy="40" r="34" class="ring-fill" id="ring-fill"/></svg>
-        <span class="countdown-num" id="countdown-num">10</span>
+        <span class="countdown-num" id="countdown-num">5</span>
       </div>
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-primary" id="btn-record">Record 10s 🎙️</button>
+      <button class="btn btn-primary" id="btn-record">Record 5s 🎙️</button>
     </div>
     <p class="hint-text" id="voice-hint">Grant mic access when prompted</p>
   </section>
@@ -147,12 +148,12 @@
         <div class="step-pip active" data-label="Perf."></div>
       </div>
     </div>
-    <h2 class="screen-title">Performance Challenge</h2>
+    <h2 class="screen-title">Banana Challenge 🍌</h2>
 
-    <div class="challenge-card">
+    <div class="challenge-card" id="perf-instructions">
       <p class="challenge-emoji">🍌</p>
       <p class="challenge-prompt">Imagine a giant banana floating in front of you.<br><strong>Demonstrate how dramatically you would react.</strong></p>
-      <p class="challenge-tip">You have 8 seconds. Full body. Maximum drama.</p>
+      <p class="challenge-tip">5 seconds. Full body. Maximum drama.</p>
     </div>
 
     <div class="cam-card" id="perf-cam-card">
@@ -163,17 +164,8 @@
       <div class="corner c-bl"></div><div class="corner c-br"></div>
       <div class="live-badge">● LIVE</div>
       <div class="perf-timer-overlay" id="perf-timer-overlay" style="display:none">
-        <span id="perf-timer-num">8</span>
+        <span id="perf-timer-num">5</span>
       </div>
-    </div>
-
-    <div class="metrics-grid">
-      <div class="metric-card"><div class="metric-label">Hand Speed</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-handspd"></div></div><div class="metric-val" id="val-handspd">—</div></div>
-      <div class="metric-card"><div class="metric-label">Arm Ext.</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-armext"></div></div><div class="metric-val" id="val-armext">—</div></div>
-      <div class="metric-card"><div class="metric-label">Body Motion</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-body"></div></div><div class="metric-val" id="val-body">—</div></div>
-      <div class="metric-card"><div class="metric-label">Head Mvmt</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-head"></div></div><div class="metric-val" id="val-head">—</div></div>
-      <div class="metric-card"><div class="metric-label">Enthusiasm</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-enth"></div></div><div class="metric-val" id="val-enth">—</div></div>
-      <div class="metric-card"><div class="metric-label">Drama Index</div><div class="metric-bar-wrap"><div class="metric-bar" id="bar-drmidx"></div></div><div class="metric-val" id="val-drmidx">—</div></div>
     </div>
 
     <div class="big-score-row">
@@ -181,8 +173,14 @@
       <span class="big-score-num" id="perf-score-live">0%</span>
     </div>
 
+    <div class="scan-progress-wrap">
+      <div class="scan-progress-bar" id="perf-progress-bar"></div>
+    </div>
+
+    <p class="live-feedback" id="perf-live-feedback">Get ready…</p>
+
     <div class="btn-row">
-      <button class="btn btn-primary" id="btn-perf-start">Start 8s Challenge 🎭</button>
+      <button class="btn btn-primary" id="btn-perf-start">Start Challenge 🎭</button>
     </div>
     <p class="hint-text" id="perf-hint">Step back so your full body is visible</p>
   </section>
@@ -217,6 +215,11 @@
       </div>
     </div>
 
+    <div class="verdict-card" id="verdict-card">
+      <div class="verdict-emoji" id="verdict-emoji">🌈</div>
+      <div class="verdict-text" id="verdict-text">—</div>
+    </div>
+
     <div class="results-breakdown">
       <div class="breakdown-item">
         <div class="breakdown-header">
@@ -225,7 +228,7 @@
           <span class="breakdown-score" id="res-face-score">—</span>
         </div>
         <div class="breakdown-bar-wrap"><div class="breakdown-bar bar-pink" id="res-face-bar"></div></div>
-        <p class="breakdown-notes" id="res-face-notes"></p>
+        <div class="insights-list" id="res-face-insights"></div>
       </div>
       <div class="breakdown-item">
         <div class="breakdown-header">
@@ -234,7 +237,7 @@
           <span class="breakdown-score" id="res-voice-score">—</span>
         </div>
         <div class="breakdown-bar-wrap"><div class="breakdown-bar bar-purple" id="res-voice-bar"></div></div>
-        <p class="breakdown-notes" id="res-voice-notes"></p>
+        <div class="insights-list" id="res-voice-insights"></div>
       </div>
       <div class="breakdown-item">
         <div class="breakdown-header">
@@ -243,13 +246,8 @@
           <span class="breakdown-score" id="res-perf-score">—</span>
         </div>
         <div class="breakdown-bar-wrap"><div class="breakdown-bar bar-blue" id="res-perf-bar"></div></div>
-        <p class="breakdown-notes" id="res-perf-notes"></p>
+        <div class="insights-list" id="res-perf-insights"></div>
       </div>
-    </div>
-
-    <div class="verdict-card" id="verdict-card">
-      <div class="verdict-emoji" id="verdict-emoji">🌈</div>
-      <div class="verdict-text" id="verdict-text">—</div>
     </div>
 
     <div class="roast-section">
@@ -257,20 +255,14 @@
       <div class="roast-list" id="roast-list"></div>
     </div>
 
-    <div class="share-card" id="share-card">
-      <div class="sc-logo">GAYDAR SCANNER™</div>
-      <div class="sc-score" id="sc-score">—</div>
-      <div class="sc-subs">
-        <div><div class="sc-sub-num" id="sc-face" style="color:var(--pink)">—</div><div class="sc-sub-lbl">Face</div></div>
-        <div><div class="sc-sub-num" id="sc-voice" style="color:var(--purple)">—</div><div class="sc-sub-lbl">Voice</div></div>
-        <div><div class="sc-sub-num" id="sc-perf" style="color:var(--blue)">—</div><div class="sc-sub-lbl">Perf.</div></div>
-      </div>
-      <div class="sc-verdict" id="sc-verdict"></div>
-      <div class="sc-url">gaygpt.ai • entertainment only</div>
-    </div>
+    <!-- Hidden share card rendered to canvas -->
+    <canvas id="share-canvas" style="display:none"></canvas>
 
-    <div class="btn-row">
+    <div class="btn-row share-btn-row">
+      <button class="btn btn-share" id="btn-download-card">💾 Download Card</button>
       <button class="btn btn-share" id="btn-copy">📋 Copy Results</button>
+    </div>
+    <div class="btn-row">
       <button class="btn btn-secondary" id="btn-again">🔄 Scan Again</button>
     </div>
     <p class="disclaimer">Entertainment only. For laughs and TikToks. Not a real classifier.</p>
